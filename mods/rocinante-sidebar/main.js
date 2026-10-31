@@ -80,8 +80,12 @@ find . -maxdepth 5 \( -name node_modules -o -name .git -o -name vendor -o -name 
 find . -maxdepth 4 \( -name node_modules -o -name .git -o -name vendor -o -name dist -o -name build \) -prune -o -type f -name '*.html' -size -300k -print 2>/dev/null | head -60 \
   | xargs -r grep -ohE "href=\"data:image/svg\+xml[^\"]+|href='data:image/svg\+xml[^']+" 2>/dev/null | head -1 | sed -E "s/^href=.//; s/^/DATA /"`;
 // Per-project overrides, for icons no search can find (a logo drawn by CSS):
-// project-icons/<machine or "local">--<repo folder name>.svg|png beats everything.
-const OVERRIDES = "mods/rocinante-sidebar/project-icons";
+// <machine or "local">--<repo folder name>.svg|png beats everything. Looked for
+// in the app home's project-icons/ first (yours; survives updates to this mod),
+// then in this mod's own project-icons/. Paths are relative to the app home.
+// image() only loads files under mods/, so app-home overrides are copied into
+// the cache (as override--<file>) and shown from there.
+const OVERRIDE_DIRS = ["project-icons", "mods/rocinante-sidebar/project-icons"];
 
 // Higher is better: a real app or touch icon beats a favicon, vector beats a
 // tiny bitmap, source beats build output.
@@ -145,20 +149,29 @@ export default class RocinanteSidebar extends View {
   }
 
   async listOverrides() {
-    try {
-      const r = await exec("ls", [`${appHome()}/${OVERRIDES}`]);
-      this.overrides = r.code === 0 ? r.stdout.split("\n").filter((f) => /\.(svg|png)$/i.test(f)) : [];
-    } catch {
-      this.overrides = [];
+    const found = [];
+    for (const dir of OVERRIDE_DIRS) {
+      try {
+        const r = await exec("ls", [`${appHome()}/${dir}`]);
+        if (r.code !== 0) continue;
+        for (const f of r.stdout.split("\n").filter((f) => /\.(svg|png)$/i.test(f))) {
+          if (dir.startsWith("mods/")) { found.push(`${dir}/${f}`); continue; }
+          // -L: the override may be a symlink (dotfiles). Refreshing the copy each
+          // minute also keeps it newer than the cache's 7-day cleanup.
+          const c = await exec("sh", ["-c", 'mkdir -p "$(dirname "$2")" && cp -fL "$1" "$2"', "x", `${appHome()}/${dir}/${f}`, `${appHome()}/${CACHE}/override--${f}`]);
+          if (c.code === 0) found.push(`${CACHE}/override--${f}`);
+        }
+      } catch {}
     }
+    this.overrides = found; // app-home ones first, so they win
   }
 
   // An override for the repo a place is in: project-icons/<machine>--<repo>.svg|png.
   override(where, root) {
     if (!root) return null;
     const machine = where.split("\u0000")[0] || "local";
-    const own = this.overrides.find((f) => f.replace(/\.(svg|png)$/i, "") === `${machine}--${root.split("/").pop()}`);
-    return own ? `${OVERRIDES}/${own}` : null;
+    const want = `${machine}--${root.split("/").pop()}`;
+    return this.overrides.find((f) => f.split("/").pop().replace(/^override--/, "").replace(/\.(svg|png)$/i, "") === want) ?? null;
   }
 
   save() {
@@ -175,10 +188,19 @@ export default class RocinanteSidebar extends View {
       .sort(([, a], [, b]) => (b.used ?? b.at) - (a.used ?? a.at))
       .slice(0, 300);
     this.art = Object.fromEntries(entries);
-    this.save();
     try {
       await exec("find", [`${appHome()}/${CACHE}`, "-maxdepth", "1", "-type", "f", "-mtime", "+7", "-delete"]);
     } catch {}
+    // A place whose cached file is gone (cache cleared, mod folder replaced) is
+    // looked up again rather than drawn blank until its next 30-minute check.
+    try {
+      const r = await exec("ls", [`${appHome()}/${CACHE}`]);
+      const have = new Set(r.code === 0 ? r.stdout.split("\n").filter(Boolean) : []);
+      for (const [where, a] of Object.entries(this.art)) {
+        if (a.file?.startsWith(`${CACHE}/`) && !have.has(a.file.split("/").pop())) delete this.art[where];
+      }
+    } catch {}
+    this.save();
   }
 
   // Looks once per place (again after 30 minutes, or 5 after a failure) for

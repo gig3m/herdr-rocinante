@@ -51,7 +51,8 @@ into an HTML page, larger PNG favicons, then `favicon.ico`. Build output, tests
 and examples rank lower; files over 90 KB are skipped.
 
 For a project whose icon can't be found (a logo drawn by CSS, say), put a file
-in `mods/rocinante-sidebar/project-icons/` named
+in `~/.config/herdr-app/project-icons/` (it survives updates to the mod;
+the mod's own `project-icons/` folder is read too) named
 `<machine>--<repo folder name>.svg` (or `.png`), where `<machine>` is the
 name from `hc machine ls`, or `local` for this computer. It wins over anything
 found.
