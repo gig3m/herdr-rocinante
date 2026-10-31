@@ -1,0 +1,64 @@
+#!/bin/bash
+# Omarchy theme-set hook: give the Herdr app (herdr-app) the theme Omarchy just applied.
+# Omarchy renders ~/.config/omarchy/themed/herdr-app.json.tpl into the theme dir;
+# this copies it to herdr-app's themes/ and points settings.json at it.
+# herdr-app 0.1.10 caches a theme by name and ignores edits to a file it already
+# loaded, so each Omarchy theme gets its own name (omarchy-<slug>). Re-applying
+# the same theme flips through graphite so the edited colors are re-read.
+set -euo pipefail
+
+theme_dir=${HERDR_OMARCHY_THEME_DIR:-$HOME/.local/state/omarchy/current/theme}
+app_home=${HERDR_APP_HOME:-${XDG_CONFIG_HOME:-$HOME/.config}/herdr-app}
+source_file=$theme_dir/herdr-app.json
+slug=${1:-$(omarchy-theme-current 2>/dev/null || echo current)}
+slug=$(printf '%s' "$slug" | tr '[:upper:] ' '[:lower:]-' | tr -cd 'a-z0-9-')
+name="omarchy-${slug:-current}"
+
+# A theme without a generated palette leaves Herdr as it is.
+[[ -f $source_file && ! -L $source_file ]] || exit 0
+[[ -d $app_home ]] || exit 0
+mkdir -p -- "$app_home/themes"
+
+# One run at a time: a second theme switch waits, so neither deletes the
+# other's palette or writes settings from a stale copy.
+exec 9>"$app_home/themes/.omarchy-theme.lock"
+flock 9
+
+temporary=$(mktemp "$app_home/themes/.omarchy.XXXXXX")
+trap 'rm -f -- "$temporary"' EXIT
+cp -- "$source_file" "$temporary"
+chmod 644 "$temporary"
+mv -f -- "$temporary" "$app_home/themes/$name.json"
+
+if python3 -I - "$app_home/settings.json" "$name" <<'PY'
+import json, os, sys, tempfile, time
+path, name = sys.argv[1], sys.argv[2]
+def read():
+    try:
+        with open(path) as f: return json.load(f)
+    except FileNotFoundError:
+        return {}
+    except ValueError:
+        # A settings.json Herdr itself can't read: leave it for the person to fix.
+        print(f"herdr-app-theme: {path} is not valid JSON; theme not switched", file=sys.stderr)
+        sys.exit(3)
+
+# Re-read before every write and change only "theme", so a zoom or other
+# setting changed meanwhile (by the app or the person) is kept.
+def write(theme):
+    settings = read()
+    settings["theme"] = theme
+    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path), prefix=".settings.")
+    with os.fdopen(fd, "w") as f: json.dump(settings, f, indent=2)
+    os.chmod(tmp, 0o644)
+    os.replace(tmp, path)
+
+if read().get("theme") == name:
+    write("graphite")
+    time.sleep(1.5)
+write(name)
+PY
+then :; else exit 0; fi
+
+# Drop the previous Omarchy palettes so the theme picker lists only the live one.
+find "$app_home/themes" -maxdepth 1 -name 'omarchy-*.json' ! -name "$name.json" -delete

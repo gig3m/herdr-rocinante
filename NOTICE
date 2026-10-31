@@ -1,0 +1,13 @@
+Rocinante, a layout for the Herdr app.
+
+mods/rocinante-tabs is a modified copy of Herdr's shipped "tabs" mod
+(Herdr 0.1.10): it draws a braille spinner for working tabs.
+
+mods/rocinante-pane is a modified copy of Herdr's shipped "pane" mod
+(Herdr 0.1.10): it draws a braille spinner for working agents.
+
+layouts/rocinante.json started as a clone of Herdr's "main" layout (0.1.10).
+
+Herdr is licensed under the Apache License, Version 2.0 (see LICENSE).
+Everything else in this repository is also licensed under the Apache
+License, Version 2.0.

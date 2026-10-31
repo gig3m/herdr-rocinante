@@ -1,0 +1,5 @@
+{
+  "layout:rocinante": {
+    "ctrl-shift-a": "agent.next"
+  }
+}

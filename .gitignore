@@ -1,0 +1,4 @@
+.icons/
+# written by `herdr-app check` and the app on start
+gpui-kit.d.ts
+jsconfig.json
