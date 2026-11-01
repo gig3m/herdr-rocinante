@@ -83,8 +83,9 @@ find . -maxdepth 4 \( -name node_modules -o -name .git -o -name vendor -o -name 
 // <machine or "local">--<repo folder name>.svg|png beats everything. Looked for
 // in the app home's project-icons/ first (yours; survives updates to this mod),
 // then in this mod's own project-icons/. Paths are relative to the app home.
-// image() only loads files under mods/, so app-home overrides are copied into
-// the cache (as override--<file>) and shown from there.
+// image() won't load through a symlink leaving the app home, and an override is
+// often one (dotfiles), so app-home overrides are copied into the cache (as
+// override--<file>) and shown from there.
 const OVERRIDE_DIRS = ["project-icons", "mods/rocinante-sidebar/project-icons"];
 
 // Higher is better: a real app or touch icon beats a favicon, vector beats a

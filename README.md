@@ -30,7 +30,8 @@ Tell your agent:
 > https://github.com/gig3m/herdr-rocinante
 
 Or by hand: copy `layouts/rocinante.json` to `~/.config/herdr-app/layouts/`,
-each folder in `mods/` to `~/.config/herdr-app/mods/`, merge `keys.json` into
+each folder in `mods/` to `~/.config/herdr-app/mods/` (copy, don't symlink: Herdr
+won't load images through a symlink leaving its folder), merge `keys.json` into
 yours, then switch layouts (`ctrl+shift+l`, or Settings → Look). Your own
 layout stays as it was.
 
