@@ -11,8 +11,9 @@ opens what your terminals mention in the file manager.
   (favicon, app icon, browser-extension icon, inline SVG favicon), otherwise a
   colored letter tile. A space with one agent shows that agent's work on a
   second line; a space with more opens into its tabs and agents.
+- **Reorder.** Drag a space onto another in its machine.
 - **Machines.** Click a machine header to collapse it to the bottom of the
-  sidebar; drag headers to reorder. Connected machines are neutral; connecting
+  sidebar; drag headers to reorder; its `+` starts a new space there. Connected machines are neutral; connecting
   is yellow, unreachable is red.
 - **Needs attention.** Only agents that are working, waiting on you, or
   finished while you weren't looking. Empty means you're caught up.

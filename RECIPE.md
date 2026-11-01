@@ -53,6 +53,7 @@ Left to right:
 - Click an agent or tab row: focus it. Agent rows show the tab's name when the
   tab is named, else the agent's terminal title (leading glyphs stripped);
   right-click the name to switch between the two (remembered per tab).
+- Drag a space's row onto another space or open card in the same machine: `space.move` to that position (in `spaces()`, from 1), with an accent line showing where it lands and the source dimmed.
 - Machine header: click collapses (it moves to the bottom; the newest collapse
   goes last) or reopens it; drag it onto another open header to reorder, with
   an accent line showing where it lands. Order and collapses are remembered.

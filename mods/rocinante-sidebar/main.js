@@ -123,6 +123,7 @@ export default class RocinanteSidebar extends View {
     this.order = JSON.parse(localStorage.getItem("machine.order") ?? "[]");
     this.collapsed = JSON.parse(localStorage.getItem("machine.collapsed") ?? "[]");
     this.drag = null; // { from, over } while a header is held
+    this.spaceDrag = null; // { from, over, machine } while a space row is held
     // Tabs whose row shows the agent's own title instead of the tab's name.
     this.flipped = new Set(JSON.parse(localStorage.getItem("flipped") ?? "[]"));
     // place ("machine\u0000folder") -> { file: path under the app home or null, at }
@@ -394,12 +395,12 @@ export default class RocinanteSidebar extends View {
         .id(`fold-${s.id}`)
         .flex_none().p(3).rounded(4).text_color(t.dim)
         .hover((x) => x.bg(t.hover).text_color(t.foreground))
-        .on_click((_e, cx) => { cx.stop_propagation(); this.toggle(s.id, open); cx.notify(); })
+        .on_click((_e, cx) => { cx.stop_propagation(); this.spaceDrag = null; this.toggle(s.id, open); cx.notify(); })
         .child(svg(`${ICONS}/chevron-${open ? "down" : "right"}.svg`).size(12))));
     const line = one && h_flex()
       .id(`one-${one.address}`)
       .pl(31).gap(7).items_center().text_size(12.5)
-      .on_click((_e, cx) => { cx.stop_propagation(); run("pane.focus", { pane: one.pane }); })
+      .on_click((_e, cx) => { cx.stop_propagation(); this.spaceDrag = null; run("pane.focus", { pane: one.pane }); })
       .child(icon(one.program, 14, t.muted) ?? div())
       .child(this.agentName(t, one, tab, one.status === "idle" ? t.muted : t.foreground))
       .when(one.status === "working" && Boolean(since), (el) => el.child(div().flex_none().text_size(11.5).text_color(t.dim).child(duration(now - since))))
@@ -412,6 +413,7 @@ export default class RocinanteSidebar extends View {
       .when(s.active && !grouped, (el) => el.bg(t.selected))
       .when(!s.active, (el) => el.hover((x) => x.bg(t.hover)))
       .on_click(() => run("space.select", { id: s.id }))
+      .on_mouse_down("left", () => { this.drag = null; this.spaceDrag = { from: s.id, over: s.id, machine: s.machine ?? null }; })
       .on_mouse_down("right", () => openOverlay({ mod: "menu", kind: "popup", width: 200, height: 260, props: { tab: "space", target: { id: s.id } } }))
       .child(head)
       .when(Boolean(one), (el) => el.child(line));
@@ -420,6 +422,33 @@ export default class RocinanteSidebar extends View {
   // The row being looked at inside an open space: a thin accent bar, not a fill.
   marker(t) {
     return div().absolute().left(24).top(7).bottom(7).w(2).rounded(1).bg(t.accent);
+  }
+
+  // A space row, or an open space's whole card, as a place to drop a dragged space:
+  // only within its machine. An accent line shows where it lands: below when dragged
+  // down, above when dragged up. The press starts on the space's own row (spaceRow).
+  spaceDropTarget(el, t, s) {
+    const d = this.spaceDrag;
+    const position = (id) => spaces().findIndex((x) => x.id === id);
+    const target = d && d.over === s.id && d.from !== s.id;
+    const down = target && position(d.from) < position(s.id);
+    return el
+      .relative()
+      .when(d?.from === s.id && d.over !== s.id, (x) => x.opacity(0.5))
+      .on_mouse_move((_e, cx) => {
+        const now = this.spaceDrag;
+        if (!now) return;
+        const over = now.machine === (s.machine ?? null) ? s.id : null; // no landing on another machine
+        if (now.over !== over) { now.over = over; cx.notify(); }
+      })
+      .on_mouse_up("left", (_e, cx) => {
+        const now = this.spaceDrag;
+        this.spaceDrag = null;
+        // space.move takes the position in spaces(), from 1, as Herdr's own list does.
+        if (now && now.from !== s.id && now.machine === (s.machine ?? null)) run("space.move", { id: now.from, index: position(s.id) + 1 });
+        cx.notify();
+      })
+      .when(target, (x) => x.child(div().absolute().left(0).right(0).h(2).bg(t.accent).when(down, (l) => l.bottom(-2)).when(!down, (l) => l.top(-2))));
   }
 
   // Under an open space: each tab, and under it its agents. A tab with one
@@ -431,6 +460,7 @@ export default class RocinanteSidebar extends View {
       const single = here.length === 1 ? here[0] : null;
       const tabRow = h_flex()
         .id(`tab-${tab.id}`)
+        .on_mouse_down("left", () => { this.drag = null; this.spaceDrag = null; })
         .relative()
         .h(28).pl(39).pr(8).gap(8).items_center().flex_none().rounded(7)
         .text_size(12.5)
@@ -446,6 +476,7 @@ export default class RocinanteSidebar extends View {
       if (single || !here.length) return [tabRow];
       return [tabRow, ...here.map((a) => h_flex()
         .id(`ag-${a.address}`)
+        .on_mouse_down("left", () => { this.drag = null; this.spaceDrag = null; })
         .relative()
         .h(26).pl(61).pr(8).gap(8).items_center().flex_none().rounded(7)
         .text_size(12.5)
@@ -500,8 +531,9 @@ export default class RocinanteSidebar extends View {
       .when(d?.from === k && d.over !== k, (el) => el.opacity(0.5))
       .text_size(11).font_semibold().text_color(color)
       .tooltip(state === "unavailable" ? "Not reachable" : state === "loading" ? "Connecting" : "Connected")
-      .on_mouse_down("left", () => { this.drag = { from: k, over: k }; })
+      .on_mouse_down("left", () => { this.spaceDrag = null; this.drag = { from: k, over: k }; })
       .on_mouse_move((_e, cx) => {
+        if (this.spaceDrag && this.spaceDrag.over !== null) { this.spaceDrag.over = null; cx.notify(); }
         if (this.drag && this.drag.over !== k && !folded) { this.drag.over = k; cx.notify(); }
       })
       .on_mouse_up("left", (_e, cx) => {
@@ -516,6 +548,24 @@ export default class RocinanteSidebar extends View {
       .child(div().flex_1().truncate().child(label(m).toUpperCase()))
       .when(folded && info.count > 0, (el) => el.child(div().flex_none().text_color(t.dim).font_normal().child(String(info.count))))
       .when(folded && Boolean(info.status) && info.status !== "idle", (el) => el.child(this.status(t, info.status) ?? div()))
+      // New space on this machine. Stops the press so the header doesn't collapse or
+      // drag. Not the release: a header drag dropped here must still end.
+      .when(state !== "unavailable" && state !== "loading", (el) => el.child(div()
+        .id(`machine-new-${k}`)
+        .size(18).flex_none().flex().items_center().justify_center().rounded(4)
+        .text_color(t.dim)
+        .hover((x) => x.bg(t.hover).text_color(t.foreground))
+        .tooltip(`New space on ${label(m)}`)
+        .on_mouse_down("left", (_e, cx) => cx.stop_propagation())
+        .on_click((_e, cx) => {
+          cx.stop_propagation();
+          if (folded) this.collapse(k); // open it, or the new space lands out of sight
+          // Each machine's home: by default a space starts in the focused terminal's
+          // folder, which may be on another machine.
+          run("space.new", m ? { machine: m } : { folder: home() });
+          cx.notify();
+        })
+        .child(svg(`${ICONS}/plus.svg`).size(12))))
       .child(svg(`${ICONS}/chevron-${folded ? "right" : "down"}.svg`).size(11).flex_none().text_color(t.dim));
   }
 
@@ -569,14 +619,14 @@ export default class RocinanteSidebar extends View {
         const sa = ag.filter((a) => a.space === s.id);
         const many = sa.length > 1 || s.tabs.length > 1;
         const open = many && (this.open[s.id] ?? s.active);
-        if (!open) return [this.spaceRow(t, s, sa, open, now)];
+        if (!open) return [this.spaceDropTarget(this.spaceRow(t, s, sa, open, now), t, s)];
         // An open space and its rows are one card, one highlight for the group.
-        return [v_flex()
+        return [this.spaceDropTarget(v_flex()
           .id(`card-${s.id}`)
           .flex_none().rounded(9).pb(4).gap(1)
           .when(s.active, (el) => el.bg(t.selected))
           .child(this.spaceRow(t, s, sa, open, now, true))
-          .children(this.tabRows(t, s, sa, now))];
+          .children(this.tabRows(t, s, sa, now)), t, s)];
       });
       if (rows.length) return rows;
       return [h_flex()
@@ -606,7 +656,10 @@ export default class RocinanteSidebar extends View {
     }
 
     return v_flex().size_full().min_h(0).bg(t.chrome).text_size(13)
-      .on_mouse_up("left", (_e, cx) => { if (this.drag) { this.drag = null; cx.notify(); } })
+      .on_mouse_up("left", (_e, cx) => { if (this.drag || this.spaceDrag) { this.drag = null; this.spaceDrag = null; cx.notify(); } })
+      // A release outside the sidebar never reaches it: the next press ends the drag,
+      // out there here, or on a row (which arms its own or disarms).
+      .on_mouse_down_out((_e, cx) => { if (this.drag || this.spaceDrag) { this.drag = null; this.spaceDrag = null; cx.notify(); } })
       .child(this.picker(t))
       .child(v_flex().flex_1().min_h(0).px(8).pb(8).gap(2).overflow_y_scrollbar().children(body))
       .when(bottom.length > 0, (el) => el.child(v_flex().flex_none().px(8).pt(2).pb(8).children(bottom)));
