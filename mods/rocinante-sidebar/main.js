@@ -6,7 +6,7 @@
 
 import { View, div, svg, image } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
-import { spaces, agents, machines, panes, focused, run, theme, shared, setShared, openOverlay, closeOverlay, props, layout, exec, appHome } from "herdr";
+import { spaces, agents, machines, panes, focused, run, theme, shared, setShared, openOverlay, closeOverlay, props, layout, exec, home, appHome } from "herdr";
 
 const ICONS = "mods/workspace-chrome";
 const PICK = "rocinante.machine"; // shared: "all" | "local" | a machine name
@@ -562,7 +562,9 @@ export default class RocinanteSidebar extends View {
         .on_click((_e, cx) => {
           cx.stop_propagation();
           if (folded) this.collapse(k); // open it, or the new space lands out of sight
-          run("space.new", { machine: m ?? "" }); // "" is this computer; left out, it follows focus
+          // Left out, the machine follows focus. Named, a space on the focused terminal's own
+          // machine still takes its folder, which may be gone: this computer's + goes home.
+          run("space.new", m ? { machine: m } : { machine: "", folder: home() });
           cx.notify();
         })
         .child(svg(`${ICONS}/plus.svg`).size(12))))
