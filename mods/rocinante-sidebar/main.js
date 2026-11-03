@@ -6,7 +6,7 @@
 
 import { View, div, svg, image } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
-import { spaces, agents, machines, panes, focused, run, theme, shared, setShared, openOverlay, closeOverlay, props, layout, exec, home, appHome } from "herdr";
+import { spaces, agents, machines, panes, focused, run, theme, shared, setShared, openOverlay, closeOverlay, props, layout, exec, appHome } from "herdr";
 
 const ICONS = "mods/workspace-chrome";
 const PICK = "rocinante.machine"; // shared: "all" | "local" | a machine name
@@ -349,8 +349,10 @@ export default class RocinanteSidebar extends View {
         .hover((s) => s.bg(t.hover).text_color(t.foreground))
         .tooltip("New space")
         .on_click(() => {
-          const m = shared(PICK) ?? "all";
-          run("space.new", m === "all" || m === "local" ? {} : { machine: m });
+          // Always name the machine: left out, a click follows the focused space's machine.
+          const pick = shared(PICK) ?? "all";
+          const m = pick === "all" ? spaces().find((s) => s.active)?.machine : pick === "local" ? null : pick;
+          run("space.new", { machine: m ?? "" });
         })
         .child(svg(`${ICONS}/plus.svg`).size(15)));
   }
@@ -560,9 +562,7 @@ export default class RocinanteSidebar extends View {
         .on_click((_e, cx) => {
           cx.stop_propagation();
           if (folded) this.collapse(k); // open it, or the new space lands out of sight
-          // Each machine's home: by default a space starts in the focused terminal's
-          // folder, which may be on another machine.
-          run("space.new", m ? { machine: m } : { folder: home() });
+          run("space.new", { machine: m ?? "" }); // "" is this computer; left out, it follows focus
           cx.notify();
         })
         .child(svg(`${ICONS}/plus.svg`).size(12))))
@@ -634,7 +634,7 @@ export default class RocinanteSidebar extends View {
         .h(30).px(8).gap(8).items_center().flex_none().rounded(7)
         .text_size(12.5).text_color(t.dim)
         .hover((x) => x.bg(t.hover).text_color(t.foreground))
-        .on_click(() => run("space.new", m ? { machine: m } : {}))
+        .on_click(() => run("space.new", { machine: m ?? "" }))
         .child(svg(`${ICONS}/plus.svg`).size(12))
         .child(state[key(m)] === "loading" ? "Loading…" : "New space there")];
     };
